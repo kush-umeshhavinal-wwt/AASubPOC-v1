@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comments Dashboard - Two-Way Sync POC</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>Comments Dashboard</h1>
+                <p class="subtitle">Two-Way Sync POC - Excel ↔ Smartsheets ↔ Dashboard</p>
+            </div>
+            <div class="header-controls">
+                <div class="sync-status" id="syncStatus">
+                    <span class="status-indicator"></span>
+                    <span class="status-text">Not connected</span>
+                </div>
+                <button class="btn btn-primary" id="refreshBtn">
+                    <span class="btn-icon">↻</span>
+                    Refresh
+                </button>
+            </div>
+        </header>
+
+        <!-- Controls Bar -->
+        <div class="controls-bar">
+            <div class="search-container">
+                <input type="text" id="searchInput" placeholder="Search comments..." class="search-input">
+                <span class="search-icon">🔍</span>
+            </div>
+            
+            <div class="filter-container">
+                <select id="statusFilter" class="filter-select">
+                    <option value="all">All Status</option>
+                    <option value="active">Active</option>
+                    <option value="archived">Archived</option>
+                </select>
+            </div>
+            
+            <div class="action-buttons">
+                <button class="btn btn-success" id="addCommentBtn">
+                    <span class="btn-icon">+</span>
+                    Add Comment
+                </button>
+            </div>
+        </div>
+
+        <!-- Comments List -->
+        <div class="comments-section">
+            <div class="comments-header">
+                <h2>Comments</h2>
+                <span class="comments-count" id="commentsCount">0 comments</span>
+            </div>
+            
+            <div class="comments-list" id="commentsList">
+                <!-- Comments will be rendered here -->
+                <div class="loading-state" id="loadingState">
+                    <div class="spinner"></div>
+                    <p>Loading comments...</p>
+                </div>
+                
+                <div class="empty-state" id="emptyState" style="display: none;">
+                    <div class="empty-icon">📝</div>
+                    <h3>No comments found</h3>
+                    <p>Get started by adding your first comment</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Comment Modal -->
+    <div class="modal" id="commentModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Add Comment</h2>
+                <button class="modal-close" id="modalClose">&times;</button>
+            </div>
+            
+            <form id="commentForm" class="modal-body">
+                <input type="hidden" id="commentRowId">
+                <input type="hidden" id="commentId">
+                
+                <div class="form-group">
+                    <label for="commentText">Comment Text</label>
+                    <textarea 
+                        id="commentText" 
+                        rows="4" 
+                        placeholder="Enter your comment here..."
+                        required
+                    ></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="commentStatus">Status</label>
+                    <select id="commentStatus" required>
+                        <option value="active">Active</option>
+                        <option value="archived">Archived</option>
+                    </select>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="saveBtn">Save Comment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal" id="deleteModal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2>Delete Comment</h2>
+                <button class="modal-close" id="deleteModalClose">&times;</button>
+            </div>
+            
+            <div class="modal-body">
+                <p>Are you sure you want to delete this comment? This action cannot be undone.</p>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelDeleteBtn">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Configuration Modal -->
+    <div class="modal" id="configModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>API Configuration</h2>
+                <button class="modal-close" id="configModalClose">&times;</button>
+            </div>
+            
+            <form id="configForm" class="modal-body">
+                <div class="form-group">
+                    <label for="apiToken">Smartsheets API Token</label>
+                    <input 
+                        type="password" 
+                        id="apiToken" 
+                        placeholder="Enter your Smartsheets API token"
+                        required
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="sheetId">Smartsheets Sheet ID</label>
+                    <input 
+                        type="text" 
+                        id="sheetId" 
+                        placeholder="Enter your Smartsheets sheet ID"
+                        required
+                    >
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelConfigBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="saveConfigBtn">Save Configuration</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="api.js"></script>
+    <script src="dashboard.js"></script>
+</body>
+</html>
