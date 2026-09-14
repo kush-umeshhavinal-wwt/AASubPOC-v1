@@ -98,10 +98,11 @@ SMARTSHEET_API_TOKEN=your_token_here
 SMARTSHEET_SHEET_ID=your_sheet_id_here
 
 # SharePoint Configuration (optional)
-SHAREPOINT_SITE_URL=https://your-sharepoint-site.com
-SHAREPOINT_FILE_URL=https://your-sharepoint-site.com/path/to/comments.xlsx
-SHAREPOINT_USERNAME=your_username
-SHAREPOINT_PASSWORD=your_password
+SHAREPOINT_AUTH_MODE=interactive
+SHAREPOINT_SITE_URL=https://wwt.sharepoint.com/sites/fsapowerflowtest
+SHAREPOINT_FILE_PATH="/sites/fsapowerflowtest/Shared Documents/AA Sub POC 2026/comments_sample.xlsx"
+SHAREPOINT_TENANT=your_tenant_id_or_verified_domain
+SHAREPOINT_CLIENT_ID=your_entra_application_client_id
 ```
 
 ### Usage

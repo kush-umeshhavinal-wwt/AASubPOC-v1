@@ -260,7 +260,7 @@ class SmartsheetsClient:
             raise ValueError("Smartsheets sheet ID is required")
         
         try:
-            self.client.Sheets.delete_row(sheet_id, row_id)
+            self.client.Sheets.delete_rows(sheet_id, [row_id])
             logger.info(f"Deleted comment with row_id: {row_id}")
             return True
             

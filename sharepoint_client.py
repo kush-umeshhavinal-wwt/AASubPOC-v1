@@ -4,26 +4,32 @@ Handles SharePoint API integration and Excel file manipulation
 """
 
 import openpyxl
-import requests
 import logging
-from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict
 import os
+import posixpath
+from office365.sharepoint.client_context import ClientContext
 import config
-import urllib3
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# SSL verification workaround for corporate environments
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
 
 class SharePointClient:
     """Client for interacting with SharePoint and Excel files"""
     
-    def __init__(self, site_url: str = None, username: str = None, password: str = None):
+    def __init__(
+        self,
+        site_url: str = None,
+        username: str = None,
+        password: str = None,
+        auth_mode: str = None,
+        tenant: str = None,
+        client_id: str = None,
+        file_path: str = None,
+        context=None
+    ):
         """
         Initialize SharePoint client
         
@@ -35,12 +41,35 @@ class SharePointClient:
         self.site_url = site_url or config.SHAREPOINT_SITE_URL
         self.username = username or config.SHAREPOINT_USERNAME
         self.password = password or config.SHAREPOINT_PASSWORD
-        
-        if not all([self.site_url, self.username, self.password]):
-            logger.warning("SharePoint credentials not fully configured - will use local file operations only")
+        self.auth_mode = (auth_mode or config.SHAREPOINT_AUTH_MODE).lower()
+        self.tenant = tenant or config.SHAREPOINT_TENANT
+        self.client_id = client_id or config.SHAREPOINT_CLIENT_ID
+        self.file_path = file_path or config.SHAREPOINT_FILE_PATH
+        self._context = context
+
+        if self.auth_mode == "local":
             self.sharepoint_enabled = False
-        else:
+        elif self.auth_mode == "interactive":
+            required = [self.site_url, self.tenant, self.client_id, self.file_path]
+            if not all(required):
+                raise ValueError("Interactive SharePoint authentication requires site URL, tenant, client ID, and file path")
             self.sharepoint_enabled = True
+        elif self.auth_mode == "user_credentials":
+            required = [self.site_url, self.username, self.password, self.file_path]
+            if not all(required):
+                raise ValueError("SharePoint user credentials authentication requires site URL, username, password, and file path")
+            self.sharepoint_enabled = True
+        else:
+            raise ValueError(f"Unsupported SharePoint authentication mode: {self.auth_mode}")
+
+    def _get_context(self):
+        if self._context is None:
+            context = ClientContext(self.site_url)
+            if self.auth_mode == "interactive":
+                self._context = context.with_interactive(self.tenant, self.client_id)
+            else:
+                self._context = context.with_user_credentials(self.username, self.password)
+        return self._context
     
     def connect_to_sharepoint(self) -> bool:
         """
@@ -55,30 +84,19 @@ class SharePointClient:
         
         try:
             # Test connection by making a simple request
-            response = requests.get(
-                self.site_url,
-                auth=(self.username, self.password),
-                timeout=10,
-                verify=False  # Disable SSL verification for corporate environments
-            )
-            
-            if response.status_code in [200, 401]:  # 401 means server is responding but auth failed
-                logger.info(f"Connected to SharePoint at: {self.site_url}")
-                return True
-            else:
-                logger.error(f"Failed to connect to SharePoint: Status {response.status_code}")
-                return False
-                
+            self._get_context().web.get().execute_query()
+            logger.info(f"Connected to SharePoint at: {self.site_url}")
+            return True
         except Exception as e:
             logger.error(f"Failed to connect to SharePoint: {e}")
             return False
     
-    def download_excel_file(self, file_url: str = None, local_path: str = None) -> str:
+    def download_excel_file(self, file_path: str = None, local_path: str = None) -> str:
         """
         Download Excel file from SharePoint
         
         Args:
-            file_url: SharePoint file URL (uses config if not provided)
+            file_path: SharePoint server-relative file path (uses config if not provided)
             local_path: Local path to save the file (uses config if not provided)
             
         Returns:
@@ -88,42 +106,38 @@ class SharePointClient:
             logger.warning("SharePoint integration not enabled - using local file")
             return local_path or config.LOCAL_EXCEL_FILE
         
-        file_url = file_url or config.SHAREPOINT_FILE_URL
+        file_path = file_path or self.file_path
         local_path = local_path or config.LOCAL_EXCEL_FILE
         
-        if not file_url:
-            raise ValueError("SharePoint file URL is required")
+        if not file_path:
+            raise ValueError("SharePoint file path is required")
         
+        temp_path = f"{local_path}.download"
         try:
-            response = requests.get(
-                file_url,
-                auth=(self.username, self.password),
-                timeout=30,
-                verify=False  # Disable SSL verification for corporate environments
-            )
-            
-            if response.status_code == 200:
-                # Ensure directory exists
-                os.makedirs(os.path.dirname(local_path), exist_ok=True)
-                
-                with open(local_path, 'wb') as f:
-                    f.write(response.content)
-                
-                logger.info(f"Downloaded Excel file to: {local_path}")
-                return local_path
-            else:
-                raise Exception(f"Failed to download file: Status {response.status_code}")
-                
+            # Ensure directory exists
+            local_dir = os.path.dirname(local_path)
+            if local_dir:
+                os.makedirs(local_dir, exist_ok=True)
+
+            with open(temp_path, 'wb') as local_file:
+                remote_file = self._get_context().web.get_file_by_server_relative_path(file_path)
+                remote_file.download(local_file).execute_query()
+            os.replace(temp_path, local_path)
+
+            logger.info(f"Downloaded Excel file to: {local_path}")
+            return local_path
         except Exception as e:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
             logger.error(f"Failed to download Excel file from SharePoint: {e}")
             raise
     
-    def upload_excel_file(self, file_url: str = None, local_path: str = None) -> bool:
+    def upload_excel_file(self, file_path: str = None, local_path: str = None) -> bool:
         """
         Upload Excel file to SharePoint
         
         Args:
-            file_url: SharePoint file URL (uses config if not provided)
+            file_path: SharePoint server-relative file path (uses config if not provided)
             local_path: Local file path to upload (uses config if not provided)
             
         Returns:
@@ -133,29 +147,21 @@ class SharePointClient:
             logger.warning("SharePoint integration not enabled - skipping upload")
             return False
         
-        file_url = file_url or config.SHAREPOINT_FILE_URL
+        file_path = file_path or self.file_path
         local_path = local_path or config.LOCAL_EXCEL_FILE
         
-        if not file_url or not local_path:
-            raise ValueError("Both file URL and local path are required")
+        if not file_path or not local_path:
+            raise ValueError("Both SharePoint file path and local path are required")
         
         try:
-            with open(local_path, 'rb') as f:
-                files = {'file': (os.path.basename(local_path), f)}
-                response = requests.put(
-                    file_url,
-                    auth=(self.username, self.password),
-                    files=files,
-                    timeout=30,
-                    verify=False  # Disable SSL verification for corporate environments
-                )
-            
-            if response.status_code in [200, 201]:
-                logger.info(f"Uploaded Excel file to SharePoint: {file_url}")
-                return True
-            else:
-                raise Exception(f"Failed to upload file: Status {response.status_code}")
-                
+            folder_path, file_name = posixpath.split(file_path)
+            with open(local_path, 'rb') as local_file:
+                content = local_file.read()
+            folder = self._get_context().web.get_folder_by_server_relative_path(folder_path)
+            folder.upload_file(file_name, content).execute_query()
+
+            logger.info(f"Uploaded Excel file to SharePoint: {file_path}")
+            return True
         except Exception as e:
             logger.error(f"Failed to upload Excel file to SharePoint: {e}")
             raise
@@ -279,11 +285,11 @@ def connect_to_sharepoint(site_url: str = None, username: str = None, password: 
         Connected SharePointClient instance
     """
     client = SharePointClient(site_url, username, password)
-    if client.connect_to_sharepoint():
+    if not client.sharepoint_enabled:
         return client
-    else:
-        logger.warning("SharePoint connection failed - client will use local file operations only")
-        return client
+    if not client.connect_to_sharepoint():
+        raise ConnectionError(f"Unable to connect to SharePoint site: {client.site_url}")
+    return client
 
 
 if __name__ == "__main__":

@@ -1,281 +1,88 @@
-# SharePoint Integration Guide
+# SharePoint Online Setup
 
-This guide covers setting up SharePoint integration for the Two-Way Comment Sync POC.
+This POC downloads the SharePoint workbook to `temp/comments.xlsx`, runs the existing Excel/Smartsheet synchronization against that working copy, and uploads the rewritten workbook after a Smartsheet-to-Excel sync.
 
-## Prerequisites
+## Target workbook
 
-- Access to a SharePoint site
-- Permissions to read/write files in the target library
-- Basic understanding of SharePoint structure
-- For this POC, you can use local file operations without SharePoint
+- Site: `https://wwt.sharepoint.com/sites/fsapowerflowtest`
+- Server-relative path: `/sites/fsapowerflowtest/Shared Documents/AA Sub POC 2026/comments_sample.xlsx`
 
-## Option 1: Local File Operations (Recommended for POC)
+The server-relative path is not the browser URL containing `Forms/AllItems.aspx`.
 
-For initial testing and POC development, you can skip SharePoint integration entirely:
+## Administrator request
 
-1. The system will use local Excel files
-2. Manual file transfer can simulate SharePoint sync
-3. No additional setup required
+Ask a Microsoft 365 administrator to create a single-tenant Entra ID app registration for manual interactive use.
 
-Simply use the sample Excel file provided:
+The registration needs:
 
-```bash
-python create_sample_excel.py
+1. A **Mobile and desktop application** platform.
+2. Redirect URI `http://localhost`.
+3. Public client flow enabled.
+4. Delegated SharePoint permission that allows the signed-in user to read and update the target workbook.
+5. Admin consent if required by organizational policy.
+
+Least privilege is preferred. Ask for a site-selected delegated permission with write access granted only to `https://wwt.sharepoint.com/sites/fsapowerflowtest`. If site-selected delegated access is unavailable in the tenant, the administrator must choose an organization-approved delegated SharePoint write permission for the POC.
+
+No client secret should be placed in this repository for interactive authentication.
+
+Request these values from the administrator:
+
+- Directory/tenant ID or verified tenant domain
+- Application/client ID
+- Confirmation that `http://localhost` is registered as the desktop redirect URI
+- Confirmation that the app and your user can read and update the target site
+
+## Local configuration
+
+Copy `.env.example` to `.env`, then configure:
+
+```dotenv
+SHAREPOINT_AUTH_MODE=interactive
+SHAREPOINT_SITE_URL=https://wwt.sharepoint.com/sites/fsapowerflowtest
+SHAREPOINT_FILE_PATH="/sites/fsapowerflowtest/Shared Documents/AA Sub POC 2026/comments_sample.xlsx"
+SHAREPOINT_TENANT=your_tenant_id_or_verified_domain
+SHAREPOINT_CLIENT_ID=your_application_client_id
+SHAREPOINT_USERNAME=
+SHAREPOINT_PASSWORD=
 ```
 
-## Option 2: Full SharePoint Integration
+Keep `.env` out of source control. `SHAREPOINT_AUTH_MODE=local` retains the existing local-file behavior.
 
-### Step 1: Prepare SharePoint Site
+## Test authentication and download
 
-1. Ensure you have access to a SharePoint site
-2. Create or identify a document library for Excel files
-3. Note the site URL and library path
+Close the workbook in Excel, then run:
 
-### Step 2: Upload Excel File
-
-1. Create your Excel file with the required structure
-2. Upload it to the SharePoint document library
-3. Note the exact file URL
-
-**Excel File Structure:**
-- Sheet name: "Comments"
-- Headers (row 1): comment_id, comment_text, created_date, modified_date, status
-- Data starts from row 2
-
-### Step 3: Get SharePoint Credentials
-
-The POC supports basic authentication (for testing):
-
-**For On-Premises SharePoint:**
-- Username: `DOMAIN\username`
-- Password: Your network password
-
-**For SharePoint Online:**
-- Username: `your.email@company.com`
-- Password: Your Microsoft 365 password
-
-**Note:** For production use, consider using OAuth/App registrations instead of basic auth.
-
-### Step 4: Configure SharePoint URLs
-
-Identify the following URLs:
-
-**Site URL:**
-```
-https://yourcompany.sharepoint.com/sites/yoursite
+```powershell
+python -c "from sharepoint_client import connect_to_sharepoint; c=connect_to_sharepoint(); p=c.download_excel_file(); rows=c.read_excel_comments(p); print(f'Downloaded {len(rows)} comments to {p}')"
 ```
 
-**File URL:**
-```
-https://yourcompany.sharepoint.com/sites/yoursite/Shared%20Documents/comments.xlsx
-```
+A Microsoft sign-in window should open. After authentication, the command should download the workbook to `temp/comments.xlsx` and print its comment count.
 
-### Step 5: Configure the POC
+## Excel to Smartsheet
 
-Add your SharePoint credentials to `.env`:
+Edit the workbook in SharePoint, close it, and run:
 
-```bash
-# .env file
-SHAREPOINT_SITE_URL=https://yourcompany.sharepoint.com/sites/yoursite
-SHAREPOINT_FILE_URL=https://yourcompany.sharepoint.com/sites/yoursite/Shared%20Documents/comments.xlsx
-SHAREPOINT_USERNAME=your.email@company.com
-SHAREPOINT_PASSWORD=your_password
+```powershell
+python -c "from sync_script import CommentSync, format_sync_results; r=CommentSync().sync_excel_to_smartsheet(); print(format_sync_results({'excel_to_smartsheet': r}))"
 ```
 
-Or update `config.py`:
+The script downloads the latest SharePoint workbook before reading it. Excel-to-Smartsheet remains a mirror operation: Smartsheet rows absent from Excel are deleted. Use a test sheet and review backups before running it.
 
-```python
-SHAREPOINT_SITE_URL = "https://yourcompany.sharepoint.com/sites/yoursite"
-SHAREPOINT_FILE_URL = "https://yourcompany.sharepoint.com/sites/yoursite/Shared%20Documents/comments.xlsx"
-SHAREPOINT_USERNAME = "your.email@company.com"
-SHAREPOINT_PASSWORD = "your_password"
+## Smartsheet to SharePoint Excel
+
+Add a comment in the dashboard, verify it in Smartsheet, close the SharePoint workbook, and run:
+
+```powershell
+python -c "from sync_script import CommentSync, format_sync_results; r=CommentSync().sync_smartsheet_to_excel(); print(format_sync_results({'smartsheet_to_excel': r}))"
 ```
 
-### Step 6: Test SharePoint Connection
+The script downloads the current workbook, rewrites the local working copy from Smartsheet, and uploads it to the same SharePoint path.
 
-Run the SharePoint client test:
+## Expected failures
 
-```bash
-python sharepoint_client.py
-```
+- `AADSTS...`: Entra app registration, redirect URI, consent, or tenant configuration is incomplete.
+- `401` or `403`: the app or signed-in user lacks access.
+- `404`: the server-relative workbook path is wrong.
+- Locked-file or upload conflict: close the workbook and retry.
 
-You should see output indicating SharePoint client initialization.
-
-## Authentication Methods
-
-### Basic Authentication (Current Implementation)
-
-The current POC uses basic authentication for simplicity:
-
-**Pros:**
-- Easy to set up
-- No additional configuration
-- Works for testing
-
-**Cons:**
-- Less secure
-- May be disabled in some organizations
-- Not recommended for production
-
-### OAuth 2.0 (Recommended for Production)
-
-For production deployment, implement OAuth 2.0:
-
-1. Register an app in Azure AD
-2. Configure permissions for SharePoint
-3. Implement OAuth flow in the Python client
-4. Use access tokens instead of basic auth
-
-### App-Only Authentication
-
-For service accounts:
-
-1. Use client credentials flow
-2. Grant app permissions to SharePoint
-3. Use certificate-based authentication
-
-## Common Issues
-
-### Authentication Failures
-
-**Problem:** 401 Unauthorized errors
-
-**Solutions:**
-- Verify username and password
-- Check if MFA is enabled (basic auth doesn't work with MFA)
-- Ensure account is not locked
-- Try accessing SharePoint in browser first
-
-### File Not Found
-
-**Problem:** 404 errors when accessing files
-
-**Solutions:**
-- Verify file URL is correct
-- Check file exists in SharePoint
-- Ensure you have permissions to the file
-- Check if URL encoding is correct (spaces as %20)
-
-### Permission Issues
-
-**Problem:** 403 Forbidden errors
-
-**Solutions:**
-- Verify user has read/write permissions
-- Check library settings for external sharing
-- Ensure file is not checked out by another user
-- Verify user account is not blocked
-
-### Network Issues
-
-**Problem:** Connection timeouts or network errors
-
-**Solutions:**
-- Check network connectivity
-- Verify firewall settings
-- Try accessing SharePoint in browser
-- Check proxy settings if applicable
-
-## Testing SharePoint Integration
-
-### Manual Testing
-
-1. **Download Test:**
-   ```python
-   from sharepoint_client import SharePointClient
-   
-   client = SharePointClient()
-   local_path = client.download_excel_file()
-   print(f"Downloaded to: {local_path}")
-   ```
-
-2. **Upload Test:**
-   ```python
-   from sharepoint_client import SharePointClient
-   
-   client = SharePointClient()
-   success = client.upload_excel_file(local_path="sample_data/comments_sample.xlsx")
-   print(f"Upload successful: {success}")
-   ```
-
-3. **Read/Write Test:**
-   ```python
-   from sharepoint_client import SharePointClient
-   
-   client = SharePointClient()
-   comments = client.read_excel_comments("sample_data/comments_sample.xlsx")
-   print(f"Read {len(comments)} comments")
-   ```
-
-## Security Considerations
-
-### Credentials Management
-
-- Never commit credentials to version control
-- Use environment variables or secure vaults
-- Rotate credentials regularly
-- Use separate accounts for different environments
-
-### Access Control
-
-- Use principle of least privilege
-- Grant only necessary permissions
-- Regularly audit access
-- Implement IP restrictions if possible
-
-### Data Protection
-
-- Ensure HTTPS is used
-- Validate SSL certificates
-- Encrypt sensitive data at rest
-- Implement audit logging
-
-## Troubleshooting
-
-### Enable Debug Logging
-
-Add this to your code for detailed logging:
-
-```python
-import logging
-logging.basicConfig(level=logging.DEBUG)
-```
-
-### Test with curl
-
-Test SharePoint connectivity:
-
-```bash
-curl -u username:password "https://yourcompany.sharepoint.com/sites/yoursite"
-```
-
-### Check SharePoint Health
-
-- Verify SharePoint site is accessible
-- Check service health status
-- Verify no maintenance windows
-
-## Alternative Approaches
-
-If SharePoint integration proves problematic:
-
-1. **Use Network Share:** Map SharePoint as network drive
-2. **Use OneDrive Sync:** Sync SharePoint library locally
-3. **Use Microsoft Graph API:** More modern approach
-4. **Use Power Automate:** Workflow-based sync
-
-## Next Steps
-
-Once SharePoint is configured:
-
-1. Test file download/upload operations
-2. Verify Excel file structure compatibility
-3. Test end-to-end sync with Smartsheets
-4. Implement error handling for network issues
-5. Add retry logic for transient failures
-
-## Additional Resources
-
-- [SharePoint REST API Documentation](https://docs.microsoft.com/en-us/sharepoint/dev/sp-add-ins/get-started-working-with-the-sharepoint-rest-service)
-- [Office 365 Python Client](https://github.com/vgrem/Office365-REST-Python-Client)
-- [SharePoint Authentication Patterns](https://docs.microsoft.com/en-us/sharepoint/dev/solution-guidance/security-best-practices)
+Do not bypass TLS certificate validation. Configure the corporate CA trust chain if HTTPS inspection causes certificate errors.
