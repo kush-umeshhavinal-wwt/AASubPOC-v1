@@ -1,6 +1,6 @@
 import unittest
 
-from sync_script import CommentSync
+from comment_sync.sync import CommentSync
 
 
 class FakeSharePoint:
@@ -63,10 +63,15 @@ class SharePointSyncIntegrationTests(unittest.TestCase):
     def test_excel_push_downloads_sharepoint_file_before_reading(self):
         excel_comments = [{
             "comment_id": "excel-new",
+            "comment_name": "SharePoint Account",
             "comment_text": "From SharePoint",
+            "age": "61",
+            "aging_bucket": "61-90",
             "created_date": "2026-09-14T10:00:00",
             "modified_date": "2026-09-14T10:00:00",
-            "status": "active"
+            "paired_comment_id": "excel-pair",
+            "flag_reason": "Offsets another comment",
+            "flagged_date": "2026-10-02"
         }]
         sync, events = self.create_sync(excel_comments, [])
 
@@ -75,15 +80,23 @@ class SharePointSyncIntegrationTests(unittest.TestCase):
         self.assertEqual(stats["added"], 1)
         self.assertEqual(events, ["download", "read", "fetch_smartsheet", "create_smartsheet"])
         self.assertEqual(sync.smartsheets_client.created[0]["comment_id"], "excel-new")
+        self.assertEqual(sync.smartsheets_client.created[0]["comment_name"], "SharePoint Account")
+        self.assertEqual(sync.smartsheets_client.created[0]["age"], "61")
+        self.assertEqual(sync.smartsheets_client.created[0]["aging_bucket"], "61-90")
 
     def test_smartsheet_pull_downloads_then_writes_and_uploads(self):
         smartsheet_comments = [{
             "row_id": 123,
             "comment_id": "dashboard-new",
+            "comment_name": "Dashboard Account",
             "comment_text": "From dashboard",
+            "age": "501",
+            "aging_bucket": "481-510",
             "created_date": "2026-09-14T11:00:00",
             "modified_date": "2026-09-14T11:00:00",
-            "status": "active"
+            "paired_comment_id": "dashboard-pair",
+            "flag_reason": "Offsets another comment",
+            "flagged_date": "2026-10-02"
         }]
         sync, events = self.create_sync([], smartsheet_comments)
 
@@ -93,10 +106,15 @@ class SharePointSyncIntegrationTests(unittest.TestCase):
         self.assertEqual(events, ["download", "read", "fetch_smartsheet", "write", "upload"])
         self.assertEqual(sync.sharepoint_client.written, [{
             "comment_id": "dashboard-new",
+            "comment_name": "Dashboard Account",
             "comment_text": "From dashboard",
+            "age": "501",
+            "aging_bucket": "481-510",
             "created_date": "2026-09-14T11:00:00",
             "modified_date": "2026-09-14T11:00:00",
-            "status": "active"
+            "paired_comment_id": "dashboard-pair",
+            "flag_reason": "Offsets another comment",
+            "flagged_date": "2026-10-02"
         }])
 
 

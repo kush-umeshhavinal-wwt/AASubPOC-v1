@@ -9,7 +9,7 @@ from typing import List, Dict
 import os
 import posixpath
 from office365.sharepoint.client_context import ClientContext
-import config
+from comment_sync import config
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -182,9 +182,12 @@ class SharePointClient:
             raise FileNotFoundError(f"Excel file not found: {local_path}")
         
         try:
-            workbook = openpyxl.load_workbook(local_path)
+            with open(local_path, 'rb') as workbook_file:
+                workbook = openpyxl.load_workbook(workbook_file)
             
             # Get the Comments sheet
+            if "Details AUG-26" in workbook.sheetnames and config.EXCEL_SHEET_NAME not in workbook.sheetnames:
+                raise ValueError("Use scripts.import_real_excel for the real Details AUG-26 workbook")
             if config.EXCEL_SHEET_NAME in workbook.sheetnames:
                 sheet = workbook[config.EXCEL_SHEET_NAME]
             else:
@@ -206,10 +209,11 @@ class SharePointClient:
                     continue
                 
                 # Create comment dictionary
-                comment = {}
-                for i, (header, value) in enumerate(zip(headers, row)):
-                    if i < len(config.EXCEL_HEADERS):
-                        comment[config.EXCEL_HEADERS[i]] = str(value) if value is not None else ''
+                comment = {
+                    header: str(value) if value is not None else ''
+                    for header, value in zip(headers, row)
+                    if header in config.EXCEL_HEADERS
+                }
                 
                 # Only include rows with comment_id
                 if comment.get('comment_id'):
@@ -248,11 +252,8 @@ class SharePointClient:
             # Write comments
             for comment in comments:
                 row = [
-                    comment.get('comment_id', ''),
-                    comment.get('comment_text', ''),
-                    comment.get('created_date', ''),
-                    comment.get('modified_date', ''),
-                    comment.get('status', 'active')
+                    comment.get(header, '')
+                    for header in config.EXCEL_HEADERS
                 ]
                 sheet.append(row)
             
@@ -299,7 +300,7 @@ if __name__ == "__main__":
         print("SharePoint client initialized")
         
         # Test reading from local file
-        local_excel = os.path.join(os.path.dirname(__file__), "sample_data", "comments_sample.xlsx")
+        local_excel = os.path.join(config.PROJECT_ROOT, "sample_data", "comments_sample.xlsx")
         if os.path.exists(local_excel):
             comments = client.read_excel_comments(local_excel)
             print(f"Read {len(comments)} comments from sample Excel file")

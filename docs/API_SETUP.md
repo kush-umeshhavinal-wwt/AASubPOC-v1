@@ -1,4 +1,4 @@
-# Smartsheets API Setup Guide
+   # Smartsheets API Setup Guide
 
 This guide walks you through setting up Smartsheets API access for the Two-Way Comment Sync POC.
 
@@ -31,18 +31,26 @@ If you don't already have a Smartsheets account:
 
 1. Create a new sheet in Smartsheets
 2. Name it "Comments POC" (or your preferred name)
-3. Create the following columns in order:
+3. Create columns with the following exact names (column order does not matter):
 
 | Column Name | Column Type | Description |
 |-------------|-------------|-------------|
 | comment_id | Text/Number | Unique identifier for each comment |
+| comment_name | Text/Number | Account-facing name for the comment |
 | comment_text | Text/Number | The actual comment content |
-| created_date | Date | When the comment was created |
-| modified_date | Date | When the comment was last modified |
-| status | Dropdown | Status (active/archived) |
+| age | Text/Number | Age in days from source Column A or dashboard edits |
+| aging_bucket | Text/Number | Aging bucket: 0-30, 31-60, 61-90, 91-180, or 180+ |
+| start_date | Date | JE effective date (source column AK), converted from Excel serial |
+| account | Text/Number | Account code (source column Y) |
+| pl_name | Text/Number | P&L name (source column F) |
+| sub_program | Text/Number | Sub program (source column T) |
+| created_date | Date | Migration/creation audit date |
+| modified_date | Date | Last dashboard edit date |
+| paired_comment_id | Text/Number | Counterpart comment ID for a flagged pair |
+| flag_reason | Text/Number | Optional reason the comments cancel or tie together |
+| flagged_date | Date | Date the pair was created |
 
-4. For the status column, create a dropdown with values: "active", "archived"
-5. Make the first column (comment_id) the primary column if possible
+4. Make `comment_id` the primary column if possible.
 
 ## Step 4: Get Your Sheet ID
 
@@ -54,7 +62,7 @@ If you don't already have a Smartsheets account:
 
 ## Step 5: Configure the POC
 
-Add your credentials to the `.env` file or `config.py`:
+Add your credentials to the `.env` file or `comment_sync/config.py`:
 
 ```bash
 # .env file
@@ -62,7 +70,7 @@ SMARTSHEET_API_TOKEN=your_generated_token_here
 SMARTSHEET_SHEET_ID=your_sheet_id_here
 ```
 
-Or update `config.py`:
+Or update `comment_sync/config.py`:
 
 ```python
 SMARTSHEET_API_TOKEN = "your_generated_token_here"
@@ -74,7 +82,7 @@ SMARTSHEET_SHEET_ID = "your_sheet_id_here"
 Run the Smartsheets client test:
 
 ```bash
-python smartsheets_client.py
+python -m comment_sync.clients.smartsheet
 ```
 
 You should see output indicating successful connection to Smartsheets.

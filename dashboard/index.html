@@ -3,78 +3,255 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Comments Dashboard</title>
-    <link rel="stylesheet" href="styles.css">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Account Comments Dashboard</title>
+    <link rel="stylesheet" href="styles.css?v=20261005-2">
 </head>
 <body>
     <div class="container">
         <header class="header">
-            <h1>Comments Dashboard</h1>
-            <p class="subtitle">Smartsheets Integration</p>
+            <div>
+                <p class="eyebrow">Accounts receivable workspace</p>
+                <h1>Account Comments</h1>
+                <p class="subtitle">Review account context and aging signals from Smartsheet</p>
+            </div>
+            <div class="view-toggle" role="tablist" aria-label="Dashboard view">
+                <button class="view-toggle-btn active" data-view="user" role="tab" aria-selected="true">User view</button>
+                <button class="view-toggle-btn" data-view="leadership" role="tab" aria-selected="false">Leadership view</button>
+            </div>
         </header>
-        
-        <div class="controls">
-            <button id="addBtn" class="btn btn-primary">
-                <span class="btn-icon">+</span> Add Comment
-            </button>
-            <button id="refreshBtn" class="btn btn-secondary">
-                <span class="btn-icon">↻</span> Refresh
-            </button>
-        </div>
-        
-        <div id="commentsList" class="comments-list"></div>
+
+        <main>
+            <section class="controls-panel">
+                <div class="controls">
+                    <div class="controls-group">
+                        <button id="addBtn" class="btn btn-primary">
+                            <span class="btn-icon">+</span> Add Comment
+                        </button>
+                        <button id="refreshBtn" class="btn btn-secondary">Refresh data</button>
+                    </div>
+                    <div class="as-of-group" role="group" aria-label="Aging as-of controls">
+                        <label class="filter-field as-of-field">
+                            <span>Aging as of</span>
+                            <input id="asOfInput" type="date">
+                        </label>
+                        <button id="calculateBtn" class="btn btn-primary">Calculate</button>
+                    </div>
+                    <span id="viewContext" class="view-context">Editing enabled</span>
+                </div>
+
+                <div class="filters" aria-label="Comment filters">
+                    <label class="filter-field filter-search">
+                        <span>Search comments</span>
+                        <input id="searchInput" type="search" placeholder="Search name or comment...">
+                    </label>
+                    <label class="filter-field">
+                        <span>Account</span>
+                        <select id="accountFilter">
+                            <option value="">All accounts</option>
+                        </select>
+                    </label>
+                    <label class="filter-field">
+                        <span>P&L Name</span>
+                        <select id="plFilter">
+                            <option value="">All P&L names</option>
+                        </select>
+                    </label>
+                    <label class="filter-field">
+                        <span>Sub Program</span>
+                        <select id="subProgramFilter">
+                            <option value="">All sub programs</option>
+                        </select>
+                    </label>
+                    <label class="filter-field">
+                        <span>Aging bucket</span>
+                        <select id="bucketFilter">
+                            <option value="">All buckets</option>
+                        </select>
+                    </label>
+                    <label class="filter-field">
+                        <span>Pair status</span>
+                        <select id="pairFilter">
+                            <option value="">All comments</option>
+                            <option value="paired">Paired</option>
+                            <option value="unpaired">Unpaired</option>
+                        </select>
+                    </label>
+                    <button id="clearFiltersBtn" class="btn btn-quiet" type="button">Clear filters</button>
+                </div>
+                <div class="results-summary">
+                    <span id="resultCount">0 accounts</span>
+                    <span id="loadState" role="status"></span>
+                </div>
+                <div id="dataWarning" class="data-warning" role="alert" hidden></div>
+            </section>
+
+            <section id="userView" class="dashboard-view" role="tabpanel">
+                <div class="grid-wrapper">
+                    <table class="data-grid" id="commentsGrid">
+                        <thead>
+                            <tr>
+                                <th>Account</th>
+                                <th>P&L Name</th>
+                                <th>Sub Program</th>
+                                <th>JE Batch / Name</th>
+                                <th>Start Date</th>
+                                <th>Age</th>
+                                <th>Bucket</th>
+                                <th>Comments</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="commentsGridBody"></tbody>
+                    </table>
+                    <div id="gridEmptyState"></div>
+                </div>
+            </section>
+
+            <section id="leadershipView" class="dashboard-view" role="tabpanel" hidden>
+                <div class="leadership-heading">
+                    <div>
+                        <p class="eyebrow">Read-only summary</p>
+                        <h2>Aging overview</h2>
+                    </div>
+                    <span class="readonly-badge">View only</span>
+                </div>
+                <div class="kpi-grid">
+                    <article class="kpi-card">
+                        <span>Total accounts</span>
+                        <strong id="totalKpi">0</strong>
+                    </article>
+                    <article class="kpi-card">
+                        <span>180+ accounts</span>
+                        <strong id="bucket180Kpi">0</strong>
+                    </article>
+                    <article class="kpi-card">
+                        <span>Average age</span>
+                        <strong id="averageAgeKpi">0</strong>
+                    </article>
+                    <article class="kpi-card kpi-alert">
+                        <span>Over 500 days</span>
+                        <strong id="over500Kpi">0</strong>
+                    </article>
+                    <article class="kpi-card kpi-paired">
+                        <span>Flagged pairs</span>
+                        <strong id="pairedKpi">0</strong>
+                    </article>
+                </div>
+                <div class="leadership-grid">
+                    <article class="panel">
+                        <div class="panel-heading">
+                            <h3>Aging distribution</h3>
+                            <span>Filtered accounts by range</span>
+                        </div>
+                        <div id="bucketDistribution" class="bucket-distribution"></div>
+                    </article>
+                    <article class="panel">
+                        <div class="panel-heading">
+                            <h3>Account comments</h3>
+                            <span>Oldest accounts first</span>
+                        </div>
+                        <div id="leadershipList" class="leadership-list"></div>
+                    </article>
+                </div>
+            </section>
+        </main>
     </div>
 
     <!-- Add/Edit Modal -->
-    <div id="commentModal" class="modal">
+    <div id="commentModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="modalTitle">Add Comment</h2>
-                <button class="modal-close" id="closeModal">&times;</button>
+                <div>
+                    <p class="eyebrow">User view</p>
+                    <h2 id="modalTitle">Add Comment</h2>
+                </div>
+                <button class="modal-close" id="closeModal" type="button" aria-label="Close">&times;</button>
             </div>
             <form id="commentForm" class="modal-body">
                 <input type="hidden" id="commentRowId">
                 <input type="hidden" id="commentId">
                 <div class="form-group">
+                    <label for="commentName">Comment name</label>
+                    <input id="commentName" type="text" placeholder="Enter an account or comment name..." required>
+                </div>
+                <div class="form-group">
                     <label for="commentText">Comment</label>
                     <textarea id="commentText" placeholder="Enter your comment..." required></textarea>
                 </div>
                 <div class="form-group">
-                    <label for="commentStatus">Status</label>
-                    <select id="commentStatus">
-                        <option value="active">Active</option>
-                        <option value="archived">Archived</option>
-                    </select>
+                    <label for="commentStartDate">Start date (JE effective date)</label>
+                    <input id="commentStartDate" type="date">
                 </div>
+                <p class="form-note">Age and aging bucket are calculated from the start date and the selected "as of" date.</p>
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Save</button>
+                    <button type="submit" class="btn btn-primary">Save comment</button>
                     <button type="button" id="cancelBtn" class="btn btn-secondary">Cancel</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Delete Modal -->
-    <div id="deleteModal" class="modal">
-        <div class="modal-content modal-small">
+    <div id="flagModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="flagModalTitle">
+        <div class="modal-content flag-modal-content">
             <div class="modal-header">
-                <h2>Delete Comment</h2>
-                <button class="modal-close" id="closeDeleteModal">&times;</button>
+                <div>
+                    <p class="eyebrow">Comment relationship</p>
+                    <h2 id="flagModalTitle">Flag comment pair</h2>
+                </div>
+                <button class="modal-close" id="closeFlagModal" type="button" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body">
-                <p>Are you sure you want to delete this comment?</p>
+                <div id="flagSourceSummary" class="flag-source-summary"></div>
+                <div id="flagCreateSection">
+                    <div class="form-group">
+                        <label for="pairSearchInput">Find the comment that cancels or ties to this one</label>
+                        <input id="pairSearchInput" type="search" placeholder="Search comment name or text...">
+                    </div>
+                    <div id="pairCandidates" class="pair-candidates"></div>
+                    <div class="form-group">
+                        <label for="flagReason">Reason <span class="optional-label">Optional</span></label>
+                        <textarea id="flagReason" placeholder="Explain why these comments cancel or tie together..."></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button id="confirmFlag" class="btn btn-primary" type="button" disabled>Save pair</button>
+                        <button id="cancelFlag" class="btn btn-secondary" type="button">Cancel</button>
+                    </div>
+                </div>
+                <div id="flagManageSection" hidden>
+                    <div id="flagPartnerDetails" class="flag-partner-details"></div>
+                    <div class="form-actions">
+                        <button id="removeFlag" class="btn btn-danger" type="button">Remove pair</button>
+                        <button id="closeManageFlag" class="btn btn-secondary" type="button">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Modal -->
+    <div id="deleteModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="deleteTitle">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2 id="deleteTitle">Delete Comment</h2>
+                <button class="modal-close" id="closeDeleteModal" type="button" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="deleteMessage">Are you sure you want to delete this comment? This action cannot be undone.</p>
                 <div class="form-actions">
-                    <button id="confirmDelete" class="btn btn-danger">Delete</button>
-                    <button id="cancelDelete" class="btn btn-secondary">Cancel</button>
+                    <button id="confirmDelete" class="btn btn-danger" type="button">Delete</button>
+                    <button id="cancelDelete" class="btn btn-secondary" type="button">Cancel</button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Toast -->
-    <div id="toast"></div>
+    <div id="toast" role="status" aria-live="polite"></div>
 
-    <script src="api.js"></script>
-    <script src="dashboard.js"></script>
+    <script src="api.js?v=20261005-2"></script>
+    <script src="dashboard.js?v=20261005-2"></script>
 </body>
 </html>

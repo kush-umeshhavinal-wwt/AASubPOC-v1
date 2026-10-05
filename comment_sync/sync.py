@@ -4,12 +4,13 @@ Handles bidirectional synchronization between Excel and Smartsheets
 """
 
 import logging
+import os
 from datetime import datetime
 from typing import List, Dict, Tuple
 import uuid
-import config
-from smartsheets_client import SmartsheetsClient
-from sharepoint_client import SharePointClient, connect_to_sharepoint
+from comment_sync import config
+from comment_sync.clients.smartsheet import SmartsheetsClient
+from comment_sync.clients.sharepoint import SharePointClient, connect_to_sharepoint
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -257,7 +258,7 @@ if __name__ == "__main__":
         sync = CommentSync()
         
         # Test with local Excel file
-        local_excel = "sample_data/comments_sample.xlsx"
+        local_excel = os.path.join(config.PROJECT_ROOT, "sample_data", "comments_sample.xlsx")
         
         print("Testing Excel to Smartsheets sync...")
         results = sync.sync_excel_to_smartsheet(local_excel)

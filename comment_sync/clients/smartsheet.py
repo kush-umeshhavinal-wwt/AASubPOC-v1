@@ -7,7 +7,7 @@ import smartsheet
 import logging
 from datetime import datetime
 from typing import List, Dict, Optional
-import config
+from comment_sync import config
 import ssl
 
 # Set up logging
@@ -76,6 +76,7 @@ class SmartsheetsClient:
         
         try:
             sheet = self.client.Sheets.get_sheet(sheet_id)
+            column_map = self._get_column_map(sheet)
             comments = []
             
             for row in sheet.rows:
@@ -85,11 +86,10 @@ class SmartsheetsClient:
                 
                 comment = {
                     'row_id': row.id,
-                    'comment_id': self._get_cell_value(row, 0),
-                    'comment_text': self._get_cell_value(row, 1),
-                    'created_date': self._get_cell_value(row, 2),
-                    'modified_date': self._get_cell_value(row, 3),
-                    'status': self._get_cell_value(row, 4)
+                    **{
+                        field: self._get_cell_value(row, column_map[field])
+                        for field in config.EXCEL_HEADERS
+                    }
                 }
                 
                 # Only include rows with comment_id
@@ -125,13 +125,7 @@ class SmartsheetsClient:
             
             # Get column IDs
             try:
-                col_ids = [
-                    self._get_column_id(sheet_id, 0),
-                    self._get_column_id(sheet_id, 1),
-                    self._get_column_id(sheet_id, 2),
-                    self._get_column_id(sheet_id, 3),
-                    self._get_column_id(sheet_id, 4)
-                ]
+                column_map = self._get_column_map(self.client.Sheets.get_sheet(sheet_id))
             except Exception as e:
                 logger.error(f"Failed to get column IDs: {e}")
                 raise
@@ -139,25 +133,10 @@ class SmartsheetsClient:
             # Set cell values
             row.cells = [
                 smartsheet.models.Cell({
-                    'columnId': col_ids[0],
-                    'value': comment_data.get('comment_id', '')
-                }),
-                smartsheet.models.Cell({
-                    'columnId': col_ids[1],
-                    'value': comment_data.get('comment_text', '')
-                }),
-                smartsheet.models.Cell({
-                    'columnId': col_ids[2],
-                    'value': comment_data.get('created_date', '')
-                }),
-                smartsheet.models.Cell({
-                    'columnId': col_ids[3],
-                    'value': comment_data.get('modified_date', '')
-                }),
-                smartsheet.models.Cell({
-                    'columnId': col_ids[4],
-                    'value': comment_data.get('status', 'active')
+                    'columnId': column_map[field],
+                    'value': None if field == 'flagged_date' and not comment_data.get(field) else comment_data.get(field, '')
                 })
+                for field in config.EXCEL_HEADERS
             ]
             
             # Add row to sheet
@@ -200,13 +179,7 @@ class SmartsheetsClient:
             
             # Get column IDs
             try:
-                col_ids = [
-                    self._get_column_id(sheet_id, 0),
-                    self._get_column_id(sheet_id, 1),
-                    self._get_column_id(sheet_id, 2),
-                    self._get_column_id(sheet_id, 3),
-                    self._get_column_id(sheet_id, 4)
-                ]
+                column_map = self._get_column_map(self.client.Sheets.get_sheet(sheet_id))
             except Exception as e:
                 logger.error(f"Failed to get column IDs: {e}")
                 raise
@@ -214,25 +187,10 @@ class SmartsheetsClient:
             # Set cell values
             row.cells = [
                 smartsheet.models.Cell({
-                    'columnId': col_ids[0],
-                    'value': comment_data.get('comment_id', '')
-                }),
-                smartsheet.models.Cell({
-                    'columnId': col_ids[1],
-                    'value': comment_data.get('comment_text', '')
-                }),
-                smartsheet.models.Cell({
-                    'columnId': col_ids[2],
-                    'value': comment_data.get('created_date', '')
-                }),
-                smartsheet.models.Cell({
-                    'columnId': col_ids[3],
-                    'value': comment_data.get('modified_date', '')
-                }),
-                smartsheet.models.Cell({
-                    'columnId': col_ids[4],
-                    'value': comment_data.get('status', 'active')
+                    'columnId': column_map[field],
+                    'value': None if field == 'flagged_date' and not comment_data.get(field) else comment_data.get(field, '')
                 })
+                for field in config.EXCEL_HEADERS
             ]
             
             # Update row in sheet
@@ -268,20 +226,29 @@ class SmartsheetsClient:
             logger.error(f"Failed to delete comment from Smartsheets: {e}")
             raise
     
-    def _get_cell_value(self, row, cell_index: int) -> str:
+    def _get_column_map(self, sheet) -> Dict[str, int]:
+        column_map = {column.title: column.id for column in sheet.columns}
+        missing = [field for field in config.EXCEL_HEADERS if field not in column_map]
+        if missing:
+            raise ValueError(f"Smartsheet is missing required columns: {', '.join(missing)}")
+        return column_map
+
+    def _get_cell_value(self, row, column_id: int) -> str:
         """
         Safely get cell value from a row
         
         Args:
             row: Smartsheet row object
-            cell_index: Index of the cell
+            column_id: ID of the cell's column
             
         Returns:
             Cell value as string or empty string
         """
         try:
-            if cell_index < len(row.cells):
-                return str(row.cells[cell_index].value or '')
+            for cell in row.cells:
+                cell_column_id = getattr(cell, 'column_id', getattr(cell, 'columnId', None))
+                if cell_column_id == column_id:
+                    return str(cell.value or '')
             return ''
         except Exception:
             return ''

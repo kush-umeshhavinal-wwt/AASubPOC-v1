@@ -3,6 +3,22 @@ class SmartsheetsAPI {
         this.apiToken = apiToken;
         this.sheetId = sheetId;
         this.baseUrl = 'https://api.smartsheet.com/2.0';
+        this.fields = [
+            'comment_id',
+            'comment_name',
+            'comment_text',
+            'age',
+            'aging_bucket',
+            'start_date',
+            'account',
+            'pl_name',
+            'sub_program',
+            'created_date',
+            'modified_date',
+            'paired_comment_id',
+            'flag_reason',
+            'flagged_date'
+        ];
     }
 
     getHeaders() {
@@ -14,16 +30,7 @@ class SmartsheetsAPI {
 
     async fetchComments() {
         try {
-            const response = await fetch(`${this.baseUrl}/sheets/${this.sheetId}`, {
-                method: 'GET',
-                headers: this.getHeaders()
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
+            const data = await this.getSheet();
             return this.parseComments(data);
         } catch (error) {
             console.error('Error fetching comments:', error);
@@ -35,16 +42,9 @@ class SmartsheetsAPI {
         try {
             const sheet = await this.getSheet();
             const columnMap = this.getColumnMap(sheet);
-
             const rowData = {
                 toBottom: true,
-                cells: [
-                    { columnId: columnMap['comment_id'], value: commentData.comment_id },
-                    { columnId: columnMap['comment_text'], value: commentData.comment_text },
-                    { columnId: columnMap['created_date'], value: commentData.created_date },
-                    { columnId: columnMap['modified_date'], value: commentData.modified_date },
-                    { columnId: columnMap['status'], value: commentData.status }
-                ]
+                cells: this.buildCells(commentData, columnMap)
             };
 
             const response = await fetch(`${this.baseUrl}/sheets/${this.sheetId}/rows`, {
@@ -69,34 +69,32 @@ class SmartsheetsAPI {
     }
 
     async updateComment(rowId, commentData) {
+        return this.updateComments([{ rowId, commentData }]);
+    }
+
+    async updateComments(updates) {
         try {
             const sheet = await this.getSheet();
             const columnMap = this.getColumnMap(sheet);
-
-            const rowData = {
+            const rows = updates.map(({ rowId, commentData }) => ({
                 id: rowId,
-                cells: [
-                    { columnId: columnMap['comment_id'], value: commentData.comment_id },
-                    { columnId: columnMap['comment_text'], value: commentData.comment_text },
-                    { columnId: columnMap['created_date'], value: commentData.created_date },
-                    { columnId: columnMap['modified_date'], value: commentData.modified_date },
-                    { columnId: columnMap['status'], value: commentData.status }
-                ]
-            };
+                cells: this.buildCells(commentData, columnMap)
+            }));
 
             const response = await fetch(`${this.baseUrl}/sheets/${this.sheetId}/rows`, {
                 method: 'PUT',
                 headers: this.getHeaders(),
-                body: JSON.stringify([rowData])
+                body: JSON.stringify(rows)
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const details = await response.text();
+                throw new Error(`Smartsheet update failed (${response.status}): ${details}`);
             }
 
             return true;
         } catch (error) {
-            console.error('Error updating comment:', error);
+            console.error('Error updating comments:', error);
             throw error;
         }
     }
@@ -145,14 +143,10 @@ class SmartsheetsAPI {
         for (const row of data.rows) {
             if (!row.cells || row.cells.length === 0) continue;
 
-            const comment = {
-                row_id: row.id,
-                comment_id: this.getCellValue(row, columnMap['comment_id']),
-                comment_text: this.getCellValue(row, columnMap['comment_text']),
-                created_date: this.getCellValue(row, columnMap['created_date']),
-                modified_date: this.getCellValue(row, columnMap['modified_date']),
-                status: this.getCellValue(row, columnMap['status'])
-            };
+            const comment = { row_id: row.id };
+            for (const field of this.fields) {
+                comment[field] = this.getCellValue(row, columnMap[field]);
+            }
 
             if (comment.comment_id) {
                 comments.push(comment);
@@ -167,12 +161,26 @@ class SmartsheetsAPI {
         for (const column of sheetData.columns) {
             map[column.title] = column.id;
         }
+        const missing = this.fields.filter(field => !map[field]);
+        if (missing.length) {
+            throw new Error(`Smartsheet is missing required columns: ${missing.join(', ')}`);
+        }
         return map;
+    }
+
+    buildCells(commentData, columnMap) {
+        return this.fields.map(field => {
+            const value = commentData[field] ?? '';
+            return {
+                columnId: columnMap[field],
+                value: value === '' ? null : value
+            };
+        });
     }
 
     getCellValue(row, columnId) {
         if (!row.cells) return '';
-        const cell = row.cells.find(c => c.columnId === columnId);
-        return cell ? (cell.value || '') : '';
+        const cell = row.cells.find(candidate => candidate.columnId === columnId);
+        return cell ? (cell.value ?? '') : '';
     }
 }

@@ -67,7 +67,7 @@ SHAREPOINT_PASSWORD=
 4. Test interactive authentication and download:
 
 ```powershell
-python -c "from sharepoint_client import connect_to_sharepoint; c=connect_to_sharepoint(); p=c.download_excel_file(); rows=c.read_excel_comments(p); print(f'Downloaded {len(rows)} comments to {p}')"
+python -c "from comment_sync.clients.sharepoint import connect_to_sharepoint; c=connect_to_sharepoint(); p=c.download_excel_file(); rows=c.read_excel_comments(p); print(f'Downloaded {len(rows)} comments to {p}')"
 ```
 
 5. Confirm the downloaded workbook exists at `temp/comments.xlsx`.
@@ -75,14 +75,14 @@ python -c "from sharepoint_client import connect_to_sharepoint; c=connect_to_sha
 7. Run SharePoint Excel to Smartsheet:
 
 ```powershell
-python -c "from sync_script import CommentSync, format_sync_results; r=CommentSync().sync_excel_to_smartsheet(); print(format_sync_results({'excel_to_smartsheet': r}))"
+python -c "from comment_sync.sync import CommentSync, format_sync_results; r=CommentSync().sync_excel_to_smartsheet(); print(format_sync_results({'excel_to_smartsheet': r}))"
 ```
 
 8. Add a dashboard comment and confirm it appears in Smartsheet.
 9. Run Smartsheet to SharePoint Excel:
 
 ```powershell
-python -c "from sync_script import CommentSync, format_sync_results; r=CommentSync().sync_smartsheet_to_excel(); print(format_sync_results({'smartsheet_to_excel': r}))"
+python -c "from comment_sync.sync import CommentSync, format_sync_results; r=CommentSync().sync_smartsheet_to_excel(); print(format_sync_results({'smartsheet_to_excel': r}))"
 ```
 
 10. Open the SharePoint workbook and verify the dashboard comment appears.
@@ -146,13 +146,13 @@ SHAREPOINT_AUTH_MODE=local
 Use the explicit workbook path for Excel to Smartsheet:
 
 ```powershell
-python -c "from sync_script import CommentSync, format_sync_results; r=CommentSync().sync_excel_to_smartsheet(r'C:\Users\umeshhak\Downloads\FS&A - Projects\AA Sub POC\v1-POC\sample_data\comments_sample.xlsx'); print(format_sync_results({'excel_to_smartsheet': r}))"
+python -c "from comment_sync.sync import CommentSync, format_sync_results; r=CommentSync().sync_excel_to_smartsheet(r'C:\Users\umeshhak\Downloads\FS&A - Projects\AA Sub POC\v1-POC\sample_data\comments_sample.xlsx'); print(format_sync_results({'excel_to_smartsheet': r}))"
 ```
 
 Use the explicit workbook path for Smartsheet to Excel:
 
 ```powershell
-python -c "from sync_script import CommentSync, format_sync_results; r=CommentSync().sync_smartsheet_to_excel(r'C:\Users\umeshhak\Downloads\FS&A - Projects\AA Sub POC\v1-POC\sample_data\comments_sample.xlsx'); print(format_sync_results({'smartsheet_to_excel': r}))"
+python -c "from comment_sync.sync import CommentSync, format_sync_results; r=CommentSync().sync_smartsheet_to_excel(r'C:\Users\umeshhak\Downloads\FS&A - Projects\AA Sub POC\v1-POC\sample_data\comments_sample.xlsx'); print(format_sync_results({'smartsheet_to_excel': r}))"
 ```
 
 In local mode, a no-argument sync expects `temp/comments.xlsx`. It will fail if that file has not been created or copied into place.

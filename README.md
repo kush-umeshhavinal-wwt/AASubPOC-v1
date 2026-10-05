@@ -1,59 +1,57 @@
 # Two-Way Comment Sync POC
 
-A proof-of-concept system demonstrating bidirectional synchronization between Excel (SharePoint), Smartsheets, and a web dashboard for comment management.
+A proof-of-concept system that migrates an accrued-liabilities Excel snapshot into Smartsheet, then uses Smartsheet as the source of truth for comment management and flag pairing.
 
 ## System Overview
 
-This POC implements a complete two-way write-back system:
+This POC implements a one-time migration followed by Smartsheet-native management:
 
-- **Excel File (SharePoint)**: Master data source with structured comment data
-- **Python Sync Script**: Bidirectional sync between SharePoint Excel and Smartsheets using APIs
-- **HTML Dashboard**: Local JavaScript application with full CRUD operations
+- **Excel Migration Snapshot**: Reads `Details AUG-26` without modifying the source workbook
+- **Smartsheet**: Source of truth after migration
+- **HTML Dashboard**: Full CRUD, aging analysis, and reciprocal comment flag pairing
 
 ### Data Flow
 
 ```
-Excel ↔ Smartsheets ↔ HTML Dashboard
-   ↓           ↓              ↓
-SharePoint   API          CRUD Operations
+Excel snapshot → Smartsheet ↔ HTML Dashboard
+ (read-only)   source       CRUD + flags
 ```
 
 ## Features
 
-- ✅ Bidirectional sync between Excel and Smartsheets
+- ✅ Dry-run-first real Excel migration with backup and rollback safeguards
 - ✅ Full CRUD operations in HTML dashboard
-- ✅ Manual sync triggers
+- ✅ Smartsheet-backed reciprocal comment flagging
 - ✅ Search and filter functionality
 - ✅ Polished, responsive UI
 - ✅ Basic error handling
-- ✅ Sample data generation
+- ✅ Real aging KPIs and long-name presentation
 
 ## Project Structure
 
 ```
-AASubPOC-v1/
-├── README.md                      # This file
-├── PLAN.md                        # Detailed implementation plan
-├── TEST_PLAN.md                   # Manual testing procedures
-├── config.py                      # Configuration and API credentials
-├── requirements.txt               # Python dependencies
-├── sync_script.py                 # Main sync orchestration logic
-├── run_sync.py                    # Manual sync trigger script
-├── smartsheets_client.py          # Smartsheets API client
-├── sharepoint_client.py           # SharePoint/Excel client
-├── create_sample_excel.py         # Sample Excel file generator
-├── sample_data/
-│   └── comments_sample.xlsx       # Sample Excel file for testing
-├── dashboard/
-│   ├── index.html                 # Main HTML dashboard
-│   ├── dashboard.js               # Dashboard JavaScript logic
-│   ├── styles.css                 # Dashboard styling
-│   └── api.js                     # Smartsheets API wrapper
-├── docs/
-│   ├── API_SETUP.md               # Smartsheets API setup guide
-│   ├── SHAREPOINT_SETUP.md        # SharePoint integration guide
-│   └── TROUBLESHOOTING.md         # Common issues and solutions
-└── .env.example                   # Environment variables template
+v1-POC/
+├── comment_sync/                  # Python application package
+│   ├── config.py                  # Configuration and shared paths
+│   ├── sync.py                    # Main sync orchestration logic
+│   └── clients/                   # External service integrations
+│       ├── sharepoint.py          # SharePoint/Excel client
+│       └── smartsheet.py          # Smartsheets API client
+├── scripts/                       # Executable utilities
+│   ├── import_real_excel.py       # Dry-run-first real-data migration
+│   ├── run_sync.py                # Legacy normalized-workbook sync
+│   └── create_sample_excel.py     # Test fixture generator
+├── dashboard/                     # HTML dashboard application
+│   ├── index.html
+│   ├── dashboard.js
+│   ├── styles.css
+│   └── api.js
+├── tests/                         # Automated Python tests
+├── sample_data/                   # Sample workbooks
+├── docs/                          # Setup, testing, and support guides
+├── README.md
+├── requirements.txt
+└── .env.example
 ```
 
 ## Quick Start
@@ -83,14 +81,15 @@ AASubPOC-v1/
    # Edit .env with your API credentials
    ```
 
-4. **Generate sample Excel data**
+4. **Dry-run the real workbook import**
    ```bash
-   python create_sample_excel.py
+   python -m scripts.import_real_excel --file "C:\\path\\to\\workbook.xlsx"
    ```
+   Review the row counts, suffixed IDs, and anomaly report before staging any Smartsheet changes.
 
 ### Configuration
 
-Edit `config.py` or create a `.env` file with your credentials:
+Edit `comment_sync/config.py` or create a `.env` file with your credentials:
 
 ```python
 # Smartsheets Configuration
@@ -107,32 +106,27 @@ SHAREPOINT_CLIENT_ID=your_entra_application_client_id
 
 ### Usage
 
-#### Running the Sync Script
+#### Migrating the Real Workbook
 
-**Interactive mode:**
+**Dry run:**
 ```bash
-python run_sync.py
+python -m scripts.import_real_excel --file "C:\\path\\to\\workbook.xlsx"
 ```
 
-**Programmatic usage:**
-```python
-from sync_script import CommentSync
-
-sync = CommentSync()
-# Sync Excel to Smartsheets
-sync.sync_excel_to_smartsheet()
-# Sync Smartsheets to Excel
-sync.sync_smartsheet_to_excel()
-# Bidirectional sync
-sync.bidirectional_sync()
+**Stage rows after review:**
+```bash
+python -m scripts.import_real_excel --file "C:\\path\\to\\workbook.xlsx" --apply --replace
 ```
+
+Staging creates a timestamped backup and verifies all real rows without deleting existing rows. Use the exact finalize command printed by the staging step only after reviewing the state file and backup. The legacy `scripts.run_sync` path is not safe for the complex `Details AUG-26` workbook.
 
 #### Using the HTML Dashboard
 
-1. Open `dashboard/index.html` in a web browser
-2. Enter your Smartsheets API credentials when prompted
-3. The dashboard will load comments from Smartsheets
-4. Use the interface to create, edit, delete, search, and filter comments
+1. Configure the ten required columns listed below in Smartsheet.
+2. Open `dashboard/index.html` in a web browser.
+3. Enter your Smartsheets API credentials when prompted.
+4. Use **User view** to search, filter, add, edit, delete, pair, and unpair comments in a data grid. Pick an "as of" date and click **Calculate** to recompute each account's age from its JE effective date (start date). Aging buckets (0-30, 31-60, 61-90, 91-180, 180+) recalculate automatically.
+5. Use **Leadership view** for read-only aging KPIs, flagged-pair counts, and account-level comment review.
 
 ## Data Schema
 
@@ -140,11 +134,20 @@ Each comment contains the following fields:
 
 ```python
 {
-    "comment_id": "string (UUID)",
+    "comment_id": "Column H value with deterministic #2/#3 suffix when repeated",
+    "comment_name": "string",
     "comment_text": "string",
-    "created_date": "ISO 8601 datetime",
-    "modified_date": "ISO 8601 datetime",
-    "status": "active | archived"
+    "age": "non-negative integer (days)",
+    "aging_bucket": "0-30 | 31-60 | 61-90 | 91-180 | 180+",
+    "start_date": "ISO 8601 date from source column AK (JE effective date)",
+    "account": "account code from source column Y",
+    "pl_name": "P&L name from source column F",
+    "sub_program": "sub program from source column T",
+    "created_date": "ISO 8601 audit date",
+    "modified_date": "ISO 8601 audit date",
+    "paired_comment_id": "counterpart comment UUID or empty",
+    "flag_reason": "optional string",
+    "flagged_date": "ISO 8601 date or empty"
 }
 ```
 
@@ -161,17 +164,17 @@ Each comment contains the following fields:
 
 **Test Smartsheets client:**
 ```bash
-python smartsheets_client.py
+python -m comment_sync.clients.smartsheet
 ```
 
 **Test SharePoint client:**
 ```bash
-python sharepoint_client.py
+python -m comment_sync.clients.sharepoint
 ```
 
 **Test sync script:**
 ```bash
-python sync_script.py
+python -m comment_sync.sync
 ```
 
 ### Dashboard Development
@@ -187,18 +190,18 @@ The dashboard uses vanilla JavaScript and can be opened directly in a browser. F
 - [Smartsheets API Setup Guide](docs/API_SETUP.md)
 - [SharePoint Integration Guide](docs/SHAREPOINT_SETUP.md)
 - [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
-- [Test Plan](TEST_PLAN.md)
+- [Test Plan](docs/TEST_PLAN.md)
 
 ## Limitations
 
 This is a POC with the following limitations:
 
-- No real-time sync (manual trigger only)
-- No conflict resolution (last write wins)
+- Excel is a one-time input snapshot; Smartsheet intentionally diverges after migration
+- Cached source formula anomalies are reported but imported as-is
 - No authentication/security for POC
 - Single user assumption (no multi-user concurrency)
 - Basic error handling (not production-grade)
-- SharePoint integration requires proper credentials
+- The POC stores API credentials in browser localStorage and has no production authentication boundary
 
 ## Troubleshooting
 
@@ -244,8 +247,7 @@ This POC is provided as-is for demonstration purposes.
 
 For issues and questions:
 - Check the [troubleshooting guide](docs/TROUBLESHOOTING.md)
-- Review the [test plan](TEST_PLAN.md)
-- Examine the [implementation plan](PLAN.md)
+- Review the [test plan](docs/TEST_PLAN.md)
 
 ## Acknowledgments
 

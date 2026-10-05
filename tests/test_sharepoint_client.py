@@ -2,7 +2,7 @@ import os
 import tempfile
 import unittest
 
-from sharepoint_client import SharePointClient
+from comment_sync.clients.sharepoint import SharePointClient
 
 
 class FakeQuery:
@@ -112,6 +112,31 @@ class SharePointClientTests(unittest.TestCase):
             self.assertEqual(context.web.file_path, self.file_path)
             self.assertTrue(context.web.remote_file.requested_download.executed)
             self.assertFalse(os.path.exists(f"{local_path}.download"))
+
+    def test_excel_round_trip_preserves_expanded_comment_schema(self):
+        client = SharePointClient(auth_mode="local")
+        comments = [{
+            "comment_id": "account-1",
+            "comment_name": "Northwind Renewal",
+            "comment_text": "Waiting for payment confirmation",
+            "age": "61",
+            "aging_bucket": "61-90",
+            "start_date": "2025-08-01",
+            "account": "ACCT-100",
+            "pl_name": "Revenue",
+            "sub_program": "SP-7",
+            "created_date": "2026-09-01T10:00:00",
+            "modified_date": "2026-09-02T10:00:00",
+            "paired_comment_id": "account-2",
+            "flag_reason": "Credit offsets invoice",
+            "flagged_date": "2026-10-02"
+        }]
+
+        with tempfile.TemporaryDirectory() as directory:
+            local_path = os.path.join(directory, "comments.xlsx")
+            client.write_excel_comments(comments, local_path)
+
+            self.assertEqual(client.read_excel_comments(local_path), comments)
 
     def test_upload_targets_parent_folder_and_filename(self):
         context = FakeContext()

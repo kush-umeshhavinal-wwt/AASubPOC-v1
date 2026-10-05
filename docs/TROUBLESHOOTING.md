@@ -278,6 +278,16 @@ logging.basicConfig(level=logging.DEBUG)
 3. Verify no ID collisions
 4. Check for null/empty IDs
 
+### Broken or Unavailable Flag Pairing
+
+**Problem:** Flag actions are disabled or a comment shows a pair issue
+
+**Solutions:**
+1. Ensure every `comment_id` is non-empty and unique
+2. Verify both paired rows reference each other through `paired_comment_id`
+3. Ensure `paired_comment_id`, `flag_reason`, and `flagged_date` columns exist with exact names
+4. Remove one-sided values from both rows, refresh, and recreate the pair through User view
+
 ### Date Format Issues
 
 **Problem:** Dates not syncing correctly
@@ -326,7 +336,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 **Solutions:**
 1. Verify sheet name: "Comments"
-2. Check headers: comment_id, comment_text, created_date, modified_date, status
+2. Check headers: comment_id, comment_name, comment_text, age, aging_bucket, created_date, modified_date, paired_comment_id, flag_reason, flagged_date
 3. Ensure headers are in first row
 4. Verify data types are correct
 
@@ -414,13 +424,13 @@ print(f"Body: {response.text}")
 
 ```bash
 # Test Smartsheets client
-python smartsheets_client.py
+python -m comment_sync.clients.smartsheet
 
 # Test SharePoint client
-python sharepoint_client.py
+python -m comment_sync.clients.sharepoint
 
 # Test sync script
-python sync_script.py
+python -m comment_sync.sync
 ```
 
 ## Getting Help

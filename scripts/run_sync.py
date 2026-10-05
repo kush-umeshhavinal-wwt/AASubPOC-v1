@@ -5,7 +5,7 @@ Provides interactive command-line interface for triggering sync operations
 
 import sys
 import logging
-from sync_script import CommentSync, format_sync_results
+from comment_sync.sync import CommentSync, format_sync_results
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

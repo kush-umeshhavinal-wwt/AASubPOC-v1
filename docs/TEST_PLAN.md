@@ -12,15 +12,15 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 
 ### Setup Steps
 1. Install dependencies: `pip install -r requirements.txt`
-2. Generate sample data: `python create_sample_excel.py`
-3. Configure API credentials in `.env` or `config.py`
+2. Dry-run the real workbook: `python -m scripts.import_real_excel --file "C:\\path\\to\\workbook.xlsx"`
+3. Configure API credentials in `.env` or `comment_sync/config.py`
 4. Set up Smartsheets sheet with correct structure
 5. (Optional) Configure SharePoint integration
 
 ### Test Data
-- Use the provided sample Excel file with 10 comments
-- Ensure Smartsheets sheet is empty for initial tests
-- Keep backup of original data for retesting
+- Use the supplied workbook and exact `Details AUG-26` worksheet
+- Expect 56 imported rows, 42 base IDs, and 14 deterministic suffixes
+- Retain the timestamped pre-migration backup and state file for rollback
 
 ## Test Scenarios
 
@@ -35,15 +35,15 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 
 **Steps:**
 1. Open terminal/command prompt
-2. Run: `python run_sync.py`
+2. Run: `python -m scripts.run_sync`
 3. Select option 1 (Excel → Smartsheets)
 4. Wait for sync to complete
 5. Check Smartsheets sheet in browser
 
 **Expected Results:**
 - Sync completes without errors
-- All 10 comments appear in Smartsheets
-- comment_id, comment_text, dates, and status match Excel
+- All 56 transformed records appear in Smartsheet
+- A/B/D/G/H mappings, suffixed IDs, and audit dates match the dry-run report
 - Success message displays statistics
 
 **Actual Results:**
@@ -67,7 +67,7 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 1. Add a new comment directly in Smartsheets
 2. Modify an existing comment in Smartsheets
 3. Open terminal/command prompt
-4. Run: `python run_sync.py`
+4. Run: `python -m scripts.run_sync`
 5. Select option 2 (Smartsheets → Excel)
 6. Wait for sync to complete
 7. Open local Excel file
@@ -98,11 +98,12 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 **Steps:**
 1. Open `dashboard/index.html` in browser
 2. Enter API credentials if prompted
-3. Click "Add Comment" button
+3. Confirm **User view** is selected and click "Add Comment"
 4. Fill in comment form:
+   - Comment name: "Test account"
    - Comment text: "Test comment from dashboard"
-   - Status: "active"
-5. Click "Save Comment"
+   - Age: 75
+5. Click "Save comment"
 6. Check Smartsheets sheet in browser
 
 **Expected Results:**
@@ -111,6 +112,7 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 - New comment appears in dashboard list
 - Comment appears in Smartsheets with correct data
 - comment_id is generated and valid
+- Age is saved as 75 and aging_bucket is automatically calculated as 61-90
 
 **Actual Results:**
 - [ ] Pass / [ ] Fail
@@ -130,10 +132,10 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 
 **Steps:**
 1. Open dashboard with comments loaded
-2. Click "Edit" button on a comment
-3. Modify comment text
-4. Change status to "archived"
-5. Click "Save Comment"
+2. Click "Edit" on a comment in User view
+3. Modify the comment name, comment text, and age
+4. Set age to 120
+5. Click "Save comment"
 6. Check Smartsheets sheet in browser
 
 **Expected Results:**
@@ -142,6 +144,8 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 - Comment updates in dashboard list
 - Changes reflect in Smartsheets
 - Modified date updates
+- Age updates to 120 and aging bucket recalculates to 91-120
+- Existing comment ID and created date remain unchanged
 
 **Actual Results:**
 - [ ] Pass / [ ] Fail
@@ -223,25 +227,24 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 
 ### Test 7: Search Functionality
 
-**Objective:** Verify search feature works correctly
+**Objective:** Verify shared search works in both dashboard views
 
 **Preconditions:**
 - Dashboard loaded with multiple comments
 
 **Steps:**
-1. Open dashboard with comments
-2. Enter search term: "sync"
-3. Verify filtered results
-4. Enter search term: "nonexistent"
-5. Verify empty state
-6. Clear search
-7. Verify all comments return
+1. Search for part of a comment name
+2. Verify only matching comments display
+3. Search for text contained in a comment body
+4. Switch to Leadership view and verify the filtered result remains
+5. Enter a nonexistent term and verify the empty state
+6. Clear search and verify all comments return
 
 **Expected Results:**
-- Real-time filtering as you type
-- Only matching comments display
-- Case-insensitive search
-- Empty state shows when no matches
+- Filtering occurs in real time and is case-insensitive
+- Comment names, text, and IDs are searchable
+- Result count and leadership KPIs reflect the filtered records
+- Filter state is preserved when switching views
 - Clearing search restores all comments
 
 **Actual Results:**
@@ -252,27 +255,27 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 
 ---
 
-### Test 8: Filter Functionality
+### Test 8: Age and Aging Bucket Filters
 
-**Objective:** Verify status filter works correctly
+**Objective:** Verify age range and aging bucket filters work together
 
 **Preconditions:**
-- Dashboard loaded with comments in different statuses
+- Dashboard loaded with comments across multiple aging buckets
 
 **Steps:**
-1. Open dashboard with comments
-2. Select "Active" filter
-3. Verify only active comments show
-4. Select "Archived" filter
-5. Verify only archived comments show
-6. Select "All Status"
-7. Verify all comments show
+1. Enter minimum age 61 and maximum age 90
+2. Verify only comments between 61 and 90 days display
+3. Select the 61-90 aging bucket
+4. Verify results remain in that bucket
+5. Switch to Leadership view
+6. Verify KPI totals and bucket counts match the filtered records
+7. Click "Clear filters"
 
 **Expected Results:**
-- Filter applies immediately
-- Only matching status comments display
-- Count updates correctly
-- Filter state persists
+- Age bounds are inclusive and apply immediately
+- Bucket options are sorted by numeric range
+- Combined filters update both views and the result count
+- Clearing filters restores the full dataset
 
 **Actual Results:**
 - [ ] Pass / [ ] Fail
@@ -282,7 +285,53 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 
 ---
 
-### Test 9: Error Handling - Invalid API Credentials
+### Test 9: Leadership View Permissions and KPIs
+
+**Objective:** Verify the leadership view is read-only and reports aging metrics
+
+**Preconditions:**
+- Dashboard loaded with real records across multiple aging buckets, including an age above 500
+
+**Steps:**
+1. Select Leadership view
+2. Review total, 365+, average-age, over-500, and flagged-pairs KPI cards
+3. Compare the aging distribution and unique pair count to the visible records
+4. Confirm the account comments are ordered oldest first
+5. Inspect the page for Add, Edit, or Delete controls
+
+**Expected Results:**
+- KPI values match the loaded or filtered comments
+- Every populated aging bucket appears in numeric order
+- Accounts older than 500 days are called out
+- Each valid reciprocal pair is counted once without changing existing KPI totals
+- No CRUD or pair-management controls are available in Leadership view
+
+---
+
+### Flagged Comment Pair Workflow
+
+**Objective:** Verify two comments can be paired, reviewed, filtered, and unpaired safely
+
+**Steps:**
+1. In User view, select **Flag pair** on an unpaired comment
+2. Search for and select another unpaired comment
+3. Enter an optional reason and save
+4. Verify both cards show reciprocal pair details
+5. Verify both Smartsheet rows contain reciprocal `paired_comment_id` values and matching reason/date
+6. Select Leadership view and verify **Flagged pairs** increases by one while existing KPIs remain unchanged
+7. Filter to Paired comments
+8. Return to User view, select **Manage flag**, and remove the pair
+
+**Expected Results:**
+- A comment cannot pair with itself or an already paired comment
+- Both rows update together and the pair is counted once
+- Leadership can view but not manage the relationship
+- Unflagging clears all three pair fields on both rows
+- Duplicate comment IDs disable new pair creation with a clear warning
+
+---
+
+### Test 10: Error Handling - Invalid API Credentials
 
 **Objective:** Verify proper error handling for invalid credentials
 
@@ -311,7 +360,7 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 
 ---
 
-### Test 10: Error Handling - Network Issues
+### Test 11: Error Handling - Network Issues
 
 **Objective:** Verify behavior when network is unavailable
 
@@ -340,7 +389,7 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 
 ---
 
-### Test 11: Excel File Structure Validation
+### Test 12: Excel File Structure Validation
 
 **Objective:** Verify Excel file structure handling
 
@@ -357,8 +406,8 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 **Expected Results:**
 - Correct structure: Works normally
 - Missing sheet: Uses first sheet with warning
-- Wrong headers: Maps by position
-- Missing columns: Handles gracefully
+- Wrong headers: Unknown fields are ignored
+- Missing columns: Missing values remain empty without shifting other fields
 - Empty file: Returns empty list
 
 **Actual Results:**
@@ -369,7 +418,7 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 
 ---
 
-### Test 12: Smartsheets Column Mapping
+### Test 13: Smartsheets Column Mapping
 
 **Objective:** Verify Smartsheets column mapping works correctly
 
@@ -386,7 +435,7 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 **Expected Results:**
 - Exact names: Works perfectly
 - Renamed columns: Error or graceful handling
-- Column order: Should match expected order
+- Column order: Does not affect title-based mapping
 - Data types: Handled correctly
 
 **Actual Results:**
@@ -397,7 +446,7 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 
 ---
 
-### Test 13: Concurrent Operations
+### Test 14: Concurrent Operations
 
 **Objective:** Verify system handles rapid successive operations
 
@@ -424,7 +473,7 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 
 ---
 
-### Test 14: Data Validation
+### Test 15: Data Validation
 
 **Objective:** Verify data validation and sanitization
 
@@ -453,7 +502,7 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 
 ---
 
-### Test 15: SharePoint Integration (If Configured)
+### Test 16: SharePoint Integration (If Configured)
 
 **Objective:** Verify SharePoint file operations
 
@@ -482,7 +531,7 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 
 ## Performance Testing
 
-### Test 16: Large Dataset Performance
+### Test 17: Large Dataset Performance
 
 **Objective:** Verify performance with larger datasets
 
@@ -513,7 +562,7 @@ Comprehensive manual testing procedures for validating the two-way comment sync 
 
 ## Browser Compatibility Testing
 
-### Test 17: Cross-Browser Testing
+### Test 18: Cross-Browser Testing
 
 **Objective:** Verify dashboard works across browsers
 

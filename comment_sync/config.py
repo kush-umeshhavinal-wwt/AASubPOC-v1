@@ -23,20 +23,33 @@ SHAREPOINT_USERNAME = os.getenv("SHAREPOINT_USERNAME", "")
 SHAREPOINT_PASSWORD = os.getenv("SHAREPOINT_PASSWORD", "")
 
 # Local File Paths
-LOCAL_TEMP_DIR = os.path.join(os.path.dirname(__file__), "temp")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
+LOCAL_TEMP_DIR = os.path.join(PROJECT_ROOT, "temp")
 LOCAL_EXCEL_FILE = os.path.join(LOCAL_TEMP_DIR, "comments.xlsx")
 
 # Create temp directory if it doesn't exist
 os.makedirs(LOCAL_TEMP_DIR, exist_ok=True)
 
 # Data Schema Constants
-STATUS_ACTIVE = "active"
-STATUS_ARCHIVED = "archived"
-VALID_STATUSES = [STATUS_ACTIVE, STATUS_ARCHIVED]
 
 # Excel Sheet Configuration
 EXCEL_SHEET_NAME = "Comments"
-EXCEL_HEADERS = ["comment_id", "comment_text", "created_date", "modified_date", "status"]
+EXCEL_HEADERS = [
+    "comment_id",
+    "comment_name",
+    "comment_text",
+    "age",
+    "aging_bucket",
+    "start_date",
+    "account",
+    "pl_name",
+    "sub_program",
+    "created_date",
+    "modified_date",
+    "paired_comment_id",
+    "flag_reason",
+    "flagged_date"
+]
 
 # Sync Configuration
 SYNC_BATCH_SIZE = 100  # Number of records to process in each batch
